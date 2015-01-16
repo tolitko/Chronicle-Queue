@@ -12,11 +12,13 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.junit.Assert.assertFalse;
 
 /**
@@ -24,6 +26,7 @@ import static org.junit.Assert.assertFalse;
  */
 public class WithMappedTest extends ChronicleTcpTestBase {
 
+    public static final String HELLO_WORLD = "Hello World";
     @Rule
     public final TestName testName = new TestName();
 
@@ -39,7 +42,6 @@ public class WithMappedTest extends ChronicleTcpTestBase {
             return -1;
         }
     }
-
 
     private static class HighLow implements BytesMarshallable {
 
@@ -60,7 +62,6 @@ public class WithMappedTest extends ChronicleTcpTestBase {
             out.writeDouble(high);
             out.writeDouble(low);
         }
-
 
         @Override
         public boolean equals(Object o) {
@@ -184,7 +185,6 @@ public class WithMappedTest extends ChronicleTcpTestBase {
         private double volume;
         private double adjClose;
 
-
         public MarketData(String... args) throws ParseException {
             int i = 0;
             date = DATE_FORMAT.parse(args[i++]).getTime();
@@ -279,9 +279,7 @@ public class WithMappedTest extends ChronicleTcpTestBase {
 
         final int port = portSupplier.getAndCheckPort();
 
-
         try {
-
 
             final Collection<MarketData> marketRecords = loadMarketData();
 
@@ -291,31 +289,22 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                 expectedMarketDate.put(new Date(marketRecord.date), marketRecord);
             }
 
-
-            Callable<Void> appenderCallable = new Callable<Void>() {
+            final Callable<Void> appenderCallable = new Callable<Void>() {
                 public Void call() throws Exception {
 
-
-                    AffinityLock lock = AffinityLock.acquireLock();
-                    try {
-                        final ExcerptAppender appender = source.createAppender();
+                    try (final ExcerptAppender appender = source.createAppender()) {
                         for (MarketData marketData : marketRecords) {
                             appender.startExcerpt();
                             marketData.writeMarshallable(appender);
                             appender.finish();
                         }
-
-                        appender.close();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    } finally {
-                        lock.release();
                     }
+
                     return null;
                 }
             };
 
-            Callable<Void> highLowCallable = new Callable<Void>() {
+            final Callable<Void> highLowCallable = new Callable<Void>() {
 
                 public Void call() throws Exception {
 
@@ -324,8 +313,6 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                             .withMapping(HighLow.fromMarketData()) // this is sent to the source
                             .connectAddress("localhost", port)
                             .build();
-
-                    AffinityLock lock = AffinityLock.acquireLock();
 
                     try (final ExcerptTailer tailer = highLowSink.createTailer()) {
 
@@ -355,7 +342,6 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                         }
 
                     } finally {
-                        lock.release();
                         highLowSink.clear();
                     }
                     return null;
@@ -428,7 +414,7 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                     }
                 };
 
-                Future<Void> appenderFuture = Executors.newSingleThreadExecutor(appenderFactory).submit(appenderCallable);
+                Future<Void> appenderFuture = newSingleThreadExecutor(appenderFactory).submit(appenderCallable);
 
 
                 appenderFuture.get(20, TimeUnit.SECONDS);
@@ -441,7 +427,7 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                     }
                 };
 
-                Future<Void> closeFuture = Executors.newSingleThreadExecutor(closeFactory).submit(closeCallable);
+                Future<Void> closeFuture = newSingleThreadExecutor(closeFactory).submit(closeCallable);
 
 
                 ThreadFactory highLowFactory = new ThreadFactory() {
@@ -452,7 +438,7 @@ public class WithMappedTest extends ChronicleTcpTestBase {
                 };
 
 
-                Future<Void> highLowFuture = Executors.newSingleThreadExecutor(highLowFactory).submit(highLowCallable);
+                Future<Void> highLowFuture = newSingleThreadExecutor(highLowFactory).submit(highLowCallable);
 
                 closeFuture.get(20, TimeUnit.SECONDS);
                 highLowFuture.get(20, TimeUnit.SECONDS);
@@ -470,6 +456,63 @@ public class WithMappedTest extends ChronicleTcpTestBase {
             assertFalse(new File(sourceBasePath).exists());
             assertFalse(new File(sinkCloseBasePath).exists());
             assertFalse(new File(sinkHighLowBasePath).exists());
+        }
+    }
+
+
+    @Test
+    public void testStatelessSource() throws Throwable {
+
+        final String sourceBasePath = getVanillaTestPath("-source");
+        final ChronicleTcpTestBase.PortSupplier portSupplier = new ChronicleTcpTestBase.PortSupplier();
+
+        try (final Chronicle chronicle = ChronicleQueueBuilder.vanilla(sourceBasePath)
+                .source()
+                .bindAddress(0)
+                .connectionListener(portSupplier)
+                .build()) {
+
+            final int port = portSupplier.getAndCheckPort();
+
+            // send the message from the stateless client
+            try (Chronicle source = ChronicleQueueBuilder.statelessSource()
+                    .connectAddress(new InetSocketAddress("localhost", port))
+                    .build()) {
+
+                try (ExcerptAppender appender = source.createAppender()) {
+                    appender.startExcerpt();
+                    appender.writeUTF(HELLO_WORLD);
+                    appender.finish();
+                }
+
+            } finally {
+                chronicle.clear();
+            }
+
+            // received the message from the stateless source into the chronicle
+            final Future<Void> submit = newSingleThreadExecutor().submit(new Callable<Void>() {
+
+                public Void call() throws Exception {
+                    try (final ExcerptTailer tailer = chronicle.createTailer()) {
+                        for (; ; ) {
+
+                            if (!tailer.nextIndex())
+                                continue;
+
+                            String actual = tailer.readUTFΔ();
+                            Assert.assertEquals(HELLO_WORLD, actual);
+                            return null;
+                        }
+                    }
+                }
+            });
+
+            try {
+                submit.get(10, TimeUnit.SECONDS);
+            } catch (ExecutionException e) {
+                throw e.getCause();
+            }
+
         }
     }
 

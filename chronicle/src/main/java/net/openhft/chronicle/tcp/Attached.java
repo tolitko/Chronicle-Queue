@@ -9,6 +9,7 @@ import net.openhft.chronicle.MappingProvider;
 public class Attached implements MappingProvider<Attached> {
 
     private MappingFunction mappingFunction;
+    private boolean statelessAppender;
 
     @Override
     public MappingFunction withMapping() {
@@ -27,4 +28,6 @@ public class Attached implements MappingProvider<Attached> {
                 "mappingFunction=" + (mappingFunction == null ? "null" : mappingFunction.getClass()
         ) + '}';
     }
+
+
 }

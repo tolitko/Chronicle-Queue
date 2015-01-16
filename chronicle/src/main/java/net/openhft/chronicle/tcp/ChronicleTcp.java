@@ -31,6 +31,7 @@ public class ChronicleTcp {
     public static final long ACTION_SUBSCRIBE = 1;
     public static final long ACTION_QUERY = 2;
     public static final long ACTION_WITH_MAPPING = 3;
+    public static final long ACTION_STATELESS_APPENDER = 4;
     public static final long IDX_TO_START = -1;
     public static final long IDX_TO_END = -2;
 

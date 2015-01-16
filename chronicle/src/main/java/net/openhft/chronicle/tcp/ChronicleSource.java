@@ -62,7 +62,11 @@ public class ChronicleSource extends WrappedChronicle {
 
     @Override
     public ExcerptAppender createAppender() throws IOException {
-        return new SourceExcerpt(wrappedChronicle.createAppender());
+
+
+      return (wrappedChronicle == null)
+        ? new StatelessAppender()
+        : new SourceExcerpt(wrappedChronicle.createAppender());
     }
 
     /**

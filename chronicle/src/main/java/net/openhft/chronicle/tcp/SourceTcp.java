@@ -125,6 +125,7 @@ public abstract class SourceTcp {
 
         // this could be re-sized so cannot be final
         protected ByteBufferBytes readBuffer;
+        private ExcerptAppender appender;
 
         private SessionHandler(final @NotNull SocketChannel socketChannel) {
             this.socketChannel = socketChannel;
@@ -170,6 +171,8 @@ public abstract class SourceTcp {
                         .register(socketChannel, SelectionKey.OP_READ, new Attached());
 
                 tailer = builder.chronicle().createTailer();
+                appender = builder.chronicle().createAppender();
+
                 selectionKeys = selector.vanillaSelectionKeys();
 
                 if (selectionKeys != null) {
@@ -305,18 +308,28 @@ public abstract class SourceTcp {
             try {
 
                 final long action = readUpTo(8).readLong();
+                Object attachment = key.attachment();
 
                 switch ((int) action) {
 
                     case (int) ChronicleTcp.ACTION_WITH_MAPPING:
                         int size = readUpTo(4).readInt();
 
-                        Object attachment = key.attachment();
+
                         if (attachment != null) {
                             MappingFunction mappingFunction = readUpTo(size).readObject(MappingFunction.class);
                             ((MappingProvider) attachment).withMapping(mappingFunction);
                         }
 
+                        return true;
+
+                    case (int) ChronicleTcp.ACTION_STATELESS_APPENDER:
+                        int appenderBufferSize = readUpTo(4).readInt();
+                        ByteBufferBytes byteBufferBytes = readUpTo(appenderBufferSize);
+                        byteBufferBytes.flip();
+                        appender.startExcerpt();
+                        appender.write(byteBufferBytes);
+                        appender.finish();
                         return true;
 
                     case (int) ChronicleTcp.ACTION_SUBSCRIBE:

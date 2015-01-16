@@ -34,7 +34,7 @@ import java.util.Collection;
 import java.util.Map;
 
 public class WrappedExcerptAppender implements ExcerptAppender {
-    protected final ExcerptAppender wrappedAppender;
+    protected ExcerptAppender wrappedAppender;
 
     public WrappedExcerptAppender(final @NotNull ExcerptAppender appender) {
         this.wrappedAppender = appender;
