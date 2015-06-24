@@ -4,6 +4,8 @@
 
 # Chronicle Queue
 
+*Note that version chronicle-3.4.2 is the last official working version released under the apache license
+
 Inter Process Communication ( IPC ) with sub millisecond latency and able to store every message:
 ![Chronicle](http://chronicle.software/wp-content/uploads/2014/07/ChronicleQueue_200px.png)
 
