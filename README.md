@@ -6,7 +6,7 @@
 
 *Note that version chronicle-3.4.2 is the last official working version released under the apache license
 
-* see also https://github.com/gfh65756/Chronicle-Queue
+*see also https://web.archive.org/web/20150625035614/https://github.com/OpenHFT/Chronicle-Queue/pull/156/files, take the code from 3.4.3 and compile it with 3.4.2
 
 Inter Process Communication ( IPC ) with sub millisecond latency and able to store every message:
 ![Chronicle](http://chronicle.software/wp-content/uploads/2014/07/ChronicleQueue_200px.png)
